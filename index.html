@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>信保案件數位化控管機制</title>
+<style>
+:root{
+  --pri:#0F5C5A; --pri-2:#1C7471; --soft:#EEF6F4; --soft-2:#DDEEEA;
+  --ink:#1D2928; --muted:#5A6866; --faint:#8C9897; --line:#D6E0DE; --line-2:#B9C8C5;
+  --ai:#138A82; --ai-bg:#DDF1EE; --ai-ink:#0B5551;
+  --auto:#4F6B87; --auto-bg:#E7EDF4; --auto-ink:#344B63;
+  --ocr:#7A838B; --ocr-bg:#EEF0F2; --ocr-ink:#4D555C;
+  --rule:#3E5A78; --rule-bg:#E2E8F0; --rule-ink:#2C4058;
+  --human:#3A3F45; --human-bg:#ECEDEE;
+  --amb:#B26F0E; --amb-bg:#FFF3DC; --amb-bd:#E3A33E;
+  --cand:#6A4C9C; --cand-bg:#F1ECF8;
+  --font:"Noto Sans TC","Microsoft JhengHei","微軟正黑體","PingFang TC","Heiti TC",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);color:var(--ink);background:#E6ECEB;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+b,strong{font-weight:700}
+
+/* ---------- toolbar ---------- */
+.bar{position:fixed;inset:0 0 auto 0;height:56px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#fff;border-bottom:1px solid var(--line);z-index:30;overflow-x:auto;white-space:nowrap}
+.brand{display:flex;flex-direction:column;line-height:1.2;padding-right:8px;border-right:1px solid var(--line);margin-right:2px}
+.brand b{font-size:15px;color:var(--pri)}
+.brand span{font-size:12px;color:var(--muted)}
+.chapters{display:flex;gap:2px}
+.bar button{border:1px solid transparent;background:none;border-radius:8px;padding:6px 9px;font-size:14px;color:var(--ink)}
+.bar button.big{font-size:22px;line-height:1;padding:2px 10px 5px;font-weight:700;color:var(--pri)}
+.bar button:hover{background:var(--soft)}
+.bar button:focus-visible,.canvas button:focus-visible{outline:3px solid #6FB5AE;outline-offset:1px}
+.bar button[disabled]{opacity:.35;cursor:default;background:none}
+.chapters button em{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--soft-2);color:var(--pri);font-size:12px;font-weight:700;margin-right:6px}
+.chapters button.on{background:var(--pri);color:#fff}
+.chapters button.on em{background:#fff}
+.appx-wrap{position:relative}
+#btnAppx{border:1px dashed var(--cand);color:var(--cand)}
+#btnAppx.on{background:var(--cand);color:#fff;border-style:solid}
+.menu{position:fixed;top:52px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;min-width:300px;z-index:40}
+.menu button{display:block;width:100%;text-align:left;padding:9px 12px!important;white-space:normal}
+.menu .mh{font-size:12px;color:var(--cand);padding:6px 12px 4px;font-weight:700}
+.spacer{flex:1}
+.ctrls{display:flex;align-items:center;gap:2px}
+.ctrls .sep{width:1px;height:24px;background:var(--line);margin:0 6px}
+#stepInfo{min-width:74px;text-align:center;font-size:13px;color:var(--muted)}
+#btnAuto.on{background:var(--pri);color:#fff}
+#appxToggle{display:none;font-size:13px;color:var(--cand);align-items:center;gap:4px;padding:0 6px}
+body.reading #appxToggle{display:inline-flex}
+body.reading .step-only{display:none}
+
+/* ---------- stage ---------- */
+#stage{position:fixed;top:56px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+body:not(.reading) #stage .frame{cursor:pointer}
+body:not(.reading) #stage{touch-action:none} /* vertical swipes turn pages instead of scrolling */
+.slide{display:none}
+.slide.active{display:block}
+.frame{position:relative;overflow:hidden;background:#fff;box-shadow:0 4px 24px rgba(15,60,58,.12);border-radius:4px}
+.canvas{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;background:#fff;overflow:hidden}
+.caps{display:none}
+body.present .bar{display:none}
+body.present #stage{top:0;background:#fff}
+body.present .frame{box-shadow:none;border-radius:0}
+#mini{position:fixed;right:18px;bottom:16px;display:none;gap:4px;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:999px;padding:4px 6px;z-index:35;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+#mini button{border:0;background:none;padding:6px 12px;border-radius:999px;font-size:14px}
+#mini button:hover{background:var(--soft)}
+body.present.show-mini #mini{display:flex}
+
+/* reading (full read / print) */
+body.reading{overflow:auto;background:#EDF1F0}
+body.reading #stage{position:static;display:block;padding:76px 16px 48px}
+body.reading .slide{display:block;margin:0 auto 44px;max-width:1400px}
+body.reading .slide.appx{display:none}
+body.reading.with-appx .slide.appx{display:block}
+.slide.only-reading{display:none!important}
+body.reading .slide.only-reading{display:block!important}
+body.reading .caps{display:block;margin:14px 4px 0;padding-left:1.6em;font-size:16px;line-height:1.75;color:var(--ink)}
+body.reading .caps li::marker{color:var(--pri);font-weight:700}
+.appx-divider{display:none}
+body.reading.with-appx .appx-divider{display:block;max-width:1400px;margin:10px auto 26px;padding:14px 18px;border:2px dashed var(--cand);border-radius:10px;color:var(--cand);font-weight:700;background:#fff}
+body.reading .capbar{display:none}
+.slide-label{display:none}
+body.reading .slide-label{display:block;max-width:1400px;margin:0 auto 8px;font-size:13px;color:var(--muted)}
+
+/* ---------- step reveal ---------- */
+.canvas [data-s]{transition:opacity .55s ease,transform .55s ease}
+.canvas [data-s]:not(.on){opacity:0;transform:translateY(10px);pointer-events:none}
+
+/* ---------- canvas common ---------- */
+.hd{position:absolute;left:56px;top:34px;width:1040px}
+.kick{font-size:18px;font-weight:700;color:var(--pri-2);letter-spacing:.04em;margin-bottom:6px}
+.hd h2{font-size:40px;line-height:1.25;color:var(--pri);font-weight:800;letter-spacing:.01em}
+.hd .sub{font-size:21px;color:var(--muted);margin-top:8px;line-height:1.45}
+.capbar{position:absolute;left:56px;right:56px;bottom:20px;min-height:54px;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--soft);border-left:5px solid var(--pri);border-radius:6px;font-size:21px;line-height:1.4;transition:opacity .4s}
+.capbar:not(.on){opacity:0}
+.capbar b{flex:none;font-size:15px;color:#fff;background:var(--pri);border-radius:999px;padding:2px 10px}
+.capbar.strong{font-weight:700;color:var(--pri);background:#E3F1EE}
+.note-motion{position:absolute;right:56px;bottom:78px;font-size:14px;color:var(--faint)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:16px;line-height:1.3;padding:3px 10px 3px 4px;border-radius:999px;border:1px solid;white-space:nowrap;vertical-align:middle}
+.chip i{font-style:normal;font-size:13px;font-weight:700;padding:1px 7px;border-radius:999px;color:#fff;letter-spacing:.02em}
+.chip.ai{background:var(--ai-bg);border-color:#9ED3CC;color:var(--ai-ink)} .chip.ai i{background:var(--ai)}
+.chip.auto{background:var(--auto-bg);border-color:#BCCADA;color:var(--auto-ink)} .chip.auto i{background:var(--auto)}
+.chip.ocr{background:var(--ocr-bg);border-color:#C7CDD2;color:var(--ocr-ink)} .chip.ocr i{background:var(--ocr)}
+.chip.rule{background:var(--rule-bg);border-color:#AEBDD0;color:var(--rule-ink)} .chip.rule i{background:var(--rule)}
+.chip.human{background:var(--human-bg);border-color:#BFC3C7;color:var(--human)} .chip.human i{background:var(--human)}
+.chip.amb{background:var(--amb-bg);border-color:var(--amb-bd);color:#80500A} .chip.amb i{background:var(--amb)}
+.chip.cand{background:var(--cand-bg);border-color:#C8B8E2;color:var(--cand)} .chip.cand i{background:var(--cand)}
+.chip.tbd{background:#fff;border:1.5px dashed #9AA3A9;color:var(--muted)}
+.chip.demo{background:#fff;border-color:var(--amb-bd);color:#80500A;padding:3px 12px}
+.arrow{display:block;width:100%;height:100%;background:no-repeat center/26px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 12h15m-6-6 6 6-6 6' fill='none' stroke='%2390A6A3' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.arrow.down{transform:rotate(90deg)}
+.tabs{position:absolute;right:56px;top:40px;display:flex;gap:6px}
+.tabs button{border:1.5px solid var(--line-2);background:#fff;border-radius:8px;padding:9px 16px;font-size:18px;color:var(--muted)}
+.tabs button.on{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700}
+
+/* ---------- slide 2 documents ---------- */
+.rep{position:absolute;left:1132px;top:166px;width:412px;height:646px;border:1.5px solid var(--line-2);border-radius:12px;background:#fff;display:flex;flex-direction:column;overflow:hidden}
+.rep .rh{padding:12px 16px;background:var(--soft);border-bottom:1px solid var(--line)}
+.rep .rh b{font-size:20px;color:var(--pri)}
+.rep .rh .chip{margin-left:6px}
+.rep .rh p{font-size:14px;color:var(--muted);margin-top:4px}
+.rep .rows{flex:1;padding:6px 16px;display:flex;flex-direction:column}
+.rrow{padding:10px 0;border-bottom:1px solid var(--line)}
+.rrow:last-child{border-bottom:0}
+.rrow .rt{display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:700;margin-bottom:4px}
+.rrow .rt span{font-size:14px;color:#fff;border-radius:999px;padding:1px 10px}
+.rrow.ok .rt span{background:var(--ai)} .rrow.diff .rt span{background:var(--amb)}
+.rrow p{font-size:15.5px;line-height:1.5;color:#33403F}
+.rrow small{display:block;font-size:13px;color:var(--faint);margin-top:2px}
+.rep .rf{padding:12px 16px;border-top:1px solid var(--line);font-size:16px;line-height:1.45;background:#FAFCFC;display:flex;flex-direction:column;gap:6px}
+.rep .rf.diff{background:var(--amb-bg)}
+
+/* ---------- continuous-play effects (only while a page is playing) ---------- */
+.beam{position:absolute;display:none;pointer-events:none;height:80px;background:linear-gradient(180deg,rgba(19,138,130,0),rgba(19,138,130,.16) 65%,rgba(19,138,130,.5));border-bottom:3px solid var(--ai);box-shadow:0 6px 18px rgba(19,138,130,.35);z-index:3}
+.beam.bk{left:0;right:0;top:20px;--dist:330px;border-radius:0}
+.playing .beam.on{display:block;animation:sweep 1.9s cubic-bezier(.45,0,.3,1) both}
+.playing .beam.bk.on{animation-delay:.9s}
+@keyframes sweep{0%{transform:translateY(0);opacity:0}12%{opacity:1}85%{opacity:1}100%{transform:translateY(var(--dist));opacity:0}}
+.playing .keypage.on .hl{animation:mark .8s 2.4s both}
+@keyframes mark{from{background:transparent;border-color:transparent;color:#7A8684}}
+.p3a .ttl .src{font-size:15px;font-weight:400;color:var(--muted)}
+
+/* ---------- slides 2A / 2B: AI 逐項比對 ---------- */
+.cxdemo{position:absolute;right:56px;top:98px}
+.platnote{position:absolute;right:250px;top:96px;display:flex;gap:8px}
+.platnote .chip{font-size:14px}
+.cxdoc{position:absolute;top:166px;width:334px;height:262px;border:1px solid var(--line-2);border-radius:8px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.05);opacity:0;transform:translateY(-18px);transition:opacity .5s calc(var(--i)*.18s),transform .6s calc(var(--i)*.18s)}
+.c-docs .cxdoc{opacity:1;transform:none}
+.cxdoc .dh{height:44px;padding:0 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);background:#FAFCFC;border-radius:8px 8px 0 0}
+.cxdoc .dh b{font-size:19px}
+.cxdoc .dh span{font-size:13px;color:var(--muted)}
+.cxdoc .db{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.stub{position:relative;height:62px;border:1.5px solid transparent;border-radius:7px;padding:19px 10px 3px;font-size:14.5px;line-height:1.4;color:#B3BCBA;transition:color .4s,border-color .4s,background .4s,box-shadow .4s}
+.stub .tx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stub.empty{background:repeating-linear-gradient(#fff 0 13px,#EDF1F0 13px 19px) content-box}
+.stub .num{position:absolute;left:8px;top:2px;font-size:12px;font-weight:700;color:#fff;background:#5E7E7A;border-radius:999px;padding:0 8px;opacity:0;transition:opacity .3s,background .3s}
+.stub .vd{position:absolute;right:8px;top:2px;font-size:12px;font-weight:700;color:#fff;border-radius:999px;padding:0 8px}
+.stub.lit{color:var(--ink);border-color:#9DB8B4;background:#F7FBFA}
+.stub.lit .num{opacity:1}
+.stub.seek{border-color:var(--ai);box-shadow:0 0 0 4px rgba(19,138,130,.2)}
+.stub.ok{border-color:var(--ai);background:#EEF8F6} .stub.ok .num,.stub.ok .vd{background:var(--ai)}
+.stub.diff{border-color:var(--amb-bd);background:var(--amb-bg)} .stub.diff .num,.stub.diff .vd{background:var(--amb)}
+.beam.bx{left:46px;top:140px;width:1070px;--dist:290px}
+.cxstage{position:absolute;left:42px;top:446px;width:1070px;height:364px;border:2px dashed #8CCBC3;border-radius:14px;background:#FBFEFD;opacity:0;transition:opacity .5s}
+.cx .rep{opacity:0;transition:opacity .5s}
+.c-stage .cxstage,.c-stage .rep{opacity:1}
+.cxh{position:absolute;left:18px;top:-15px;background:#fff}
+.cxt{position:absolute;left:24px;top:18px;font-size:24px;font-weight:800;color:var(--pri);transition:opacity .3s}
+.cxt small{font-size:15px;font-weight:400;color:var(--muted);margin-left:14px}
+.cxst{position:absolute;right:24px;top:12px;font-size:22px;font-weight:800;border:3px solid;border-radius:8px;padding:2px 14px;opacity:0;transform:rotate(-4deg)}
+.cxst.ok{color:var(--ai);border-color:var(--ai);background:#EEF8F6}
+.cxst.diff{color:var(--amb);border-color:var(--amb);background:var(--amb-bg)}
+.cxst.on{opacity:1}
+.playing .cxst.on{animation:stampIn .5s cubic-bezier(.3,.8,.4,1) both}
+.playing .cxst.on.diff{animation:stampIn .5s cubic-bezier(.3,.8,.4,1) both,shake .45s .5s}
+@keyframes stampIn{0%{opacity:0;transform:scale(2.4) rotate(-14deg)}65%{opacity:1;transform:scale(.92) rotate(-3deg)}100%{opacity:1;transform:rotate(-4deg)}}
+@keyframes shake{25%{transform:translateX(-6px) rotate(-4deg)}50%{transform:translateX(6px) rotate(-4deg)}75%{transform:translateX(-3px) rotate(-4deg)}}
+.cxrow{position:absolute;left:24px;right:24px;height:54px;display:flex;align-items:center;gap:14px;padding:0 16px;background:#fff;border:1.5px solid #CFE3E0;border-radius:9px;font-size:20px;white-space:nowrap;transform-origin:0 0;transition:opacity .3s}
+.cxrow .dn{flex:none;width:84px;font-size:15px;font-weight:700;color:var(--muted)}
+.cxstage.swap .cxrow,.cxstage.swap .cxlinks,.cxstage.swap .cxwhy,.cxstage.swap .cxst,.cxstage.swap .cxt{opacity:0}
+.cxrow mark{--mk:#BFE6E0;color:inherit;border-radius:4px;padding:1px 2px;margin:0 -2px;background:linear-gradient(var(--mk),var(--mk)) no-repeat 0 0/0% 100%;transition:background-size .45s ease}
+.cxrow mark.neq{--mk:#FFD991}
+.cxrow mark.hit{background-size:100% 100%}
+svg.cxlinks{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:2;transition:opacity .3s}
+.cxlinks path{fill:none;stroke-width:2.5;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .5s ease}
+.cxlinks .eq path{stroke:var(--ai)} .cxlinks .neq path{stroke:var(--amb)}
+.cxlinks path.on{stroke-dashoffset:0}
+.cxlinks .bd{opacity:0;transform:scale(.2);transform-box:fill-box;transform-origin:center;transition:opacity .2s,transform .35s cubic-bezier(.3,1.7,.5,1)}
+.cxlinks .bd.on{opacity:1;transform:none}
+.cxlinks circle{stroke:#fff;stroke-width:2}
+.cxlinks .eq circle{fill:var(--ai)} .cxlinks .neq circle{fill:var(--amb)}
+.cxlinks text{fill:#fff;font-size:17px;font-weight:800;text-anchor:middle;font-family:var(--font)}
+.cxwhy{position:absolute;left:24px;right:24px;bottom:14px;min-height:46px;display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:8px;background:var(--ai-bg);color:var(--ai-ink);font-size:18px;line-height:1.4;font-weight:600;transition:opacity .3s}
+.cxwhy:empty{opacity:0}
+.cxwhy.diff{background:var(--amb-bg);color:#7A4A06}
+.cxwhy .chip{flex:none}
+.cxwhy.typing .w::after{content:'▍';animation:blink .7s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.cx .rows:empty::before{content:'等待比對結果…';display:block;padding:12px 0;font-size:15px;color:var(--faint)}
+.playing .rep .rrow.new{animation:rowin .6s both}
+@keyframes rowin{from{opacity:0;transform:translateX(18px)}}
+.cx .rf{opacity:0;transition:opacity .5s}
+.c-done .rf{opacity:1}
+.playing.c-done .rf.diff{animation:alert .9s .3s 2}
+@keyframes alert{50%{box-shadow:inset 0 0 0 3px var(--amb-bd)}}
+
+/* ---------- shared: AI cards ---------- */
+.en{font-size:15px;font-weight:800;color:var(--ai);letter-spacing:.08em}
+ul.dots{list-style:none;display:flex;flex-direction:column;gap:9px;font-size:18px;line-height:1.45}
+ul.dots li{position:relative;padding-left:22px}
+ul.dots li::before{content:'';position:absolute;left:4px;top:.55em;width:9px;height:9px;border-radius:50%;background:var(--ai)}
+
+/* ---------- platform colours ---------- */
+.chip.fb{background:#E6F1FA;border-color:#A9C8E4;color:#164E78} .chip.fb i{background:#1F6FA8}
+
+/* ---------- slide 1: scenarios x platforms inside the RPA frame ---------- */
+.rpaframe{position:absolute;left:56px;top:190px;width:1488px;height:462px;border:2px dashed #9FB2C6;border-radius:16px;background:#F7F9FB}
+.rpaframe > .chip{position:absolute;left:20px;top:-17px;background:#fff}
+.mx{position:absolute;left:76px;top:214px;width:1448px;height:418px;display:grid;grid-template-columns:260px 1fr 1fr 240px;grid-template-rows:104px 1fr 1fr;gap:12px}
+.mx .corner{display:flex;align-items:flex-end;font-size:15px;color:var(--muted);padding:0 4px 8px}
+.mx .ph{border-radius:12px;padding:12px 18px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.mx .ph b{font-size:24px}
+.mx .ph span:last-child{font-size:15.5px;color:var(--muted)}
+.mx .ph.fb{background:#E6F1FA;border:1.5px solid #A9C8E4} .mx .ph.fb b{color:#164E78}
+.mx .ph.cp{background:var(--ai-bg);border:1.5px solid #9ED3CC} .mx .ph.cp b{color:var(--ai-ink)}
+.when{align-self:flex-start;font-size:13.5px;font-weight:800;color:#fff;border-radius:6px;padding:1px 10px}
+.fb .when{background:#1F6FA8} .cp .when{background:var(--ai)}
+.mx .sc{background:#fff;border:1.5px solid var(--line-2);border-radius:12px;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.mx .sc small{font-size:15px;font-weight:800;color:var(--ai);letter-spacing:.06em}
+.mx .sc b{font-size:22px;line-height:1.35}
+.mx .mc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:18.5px;line-height:1.55;display:flex;align-items:center}
+.mx .mc.fb{border-left:6px solid #1F6FA8} .mx .mc.cp{border-left:6px solid var(--ai)}
+.rmcol{grid-column:4;grid-row:1/4;background:var(--human);color:#fff;border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.rmcol .who{font-size:44px;font-weight:800;line-height:1}
+.rmcol p{font-size:19px;line-height:1.55}
+.rmcol small{font-size:15px;opacity:.85}
+
+/* ---------- slide 2: platforms ---------- */
+.plat{position:absolute;top:186px;width:716px;height:420px;border-radius:16px;padding:20px 26px;display:flex;flex-direction:column;gap:10px}
+.plat.fb{left:56px;background:linear-gradient(160deg,#E3EEF9,#F8FAFD);border:2px solid #1F6FA8}
+.plat.cp{left:828px;background:linear-gradient(160deg,#E2F3F0,#F6FBFA);border:2px solid var(--ai)}
+.plat .when{font-size:15px;padding:2px 12px}
+.plat h3{font-size:32px}
+.plat.fb h3{color:#164E78} .plat.cp h3{color:var(--ai-ink)}
+.plat dl{display:grid;grid-template-columns:72px 1fr;gap:9px 12px;font-size:18.5px;line-height:1.5}
+.plat dt{font-size:16px;font-weight:700;color:var(--muted);padding-top:2px}
+.plat .why{margin-top:auto;background:#fff;border-left:5px solid var(--ai);border-radius:8px;padding:10px 14px;font-size:17px;line-height:1.5}
+.plat .why b{display:block;color:var(--ai-ink);font-size:17px}
+.tl2{position:absolute;left:56px;top:632px;width:1488px;height:104px;display:grid;grid-template-columns:1fr 60px 1fr;align-items:stretch}
+.tl2 .st{border-radius:12px;padding:14px 20px;font-size:19px;line-height:1.45;display:flex;align-items:center;gap:16px;background:#fff}
+.tl2 .st b{flex:none;font-size:16px;color:#fff;border-radius:8px;padding:6px 12px}
+.tl2 .st.fb{border:1.5px solid #A9C8E4} .tl2 .st.fb b{background:#1F6FA8}
+.tl2 .st.cp{border:1.5px solid #9ED3CC} .tl2 .st.cp b{background:var(--ai)}
+.rpanote{position:absolute;left:56px;top:760px;width:1488px;display:flex;align-items:center;gap:14px;font-size:18px;color:var(--ink);padding:12px 18px;border:1.5px dashed #9FB2C6;border-radius:10px;background:#F7F9FB}
+
+/* ---------- slide 4: 場景二 限額計算 ---------- */
+.sched{position:absolute;right:56px;top:28px;width:430px;border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:#FAFCFC}
+.sched h5{font-size:15px;color:var(--muted);margin-bottom:6px;font-weight:700}
+.sched ul{list-style:none;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:16px;line-height:1.35}
+.sched li{display:contents}
+.sched li b{color:var(--pri);white-space:nowrap}
+.phase{position:absolute;top:178px;height:440px;border:1.5px solid;border-radius:14px;background:#fff;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.ph1{left:56px;width:700px;border-color:#A9C8E4}
+.ph2{left:784px;width:760px;border-color:#9ED3CC}
+.phh{display:flex;align-items:center;gap:10px}
+.phh b{font-size:21px}
+.phh .chip{margin-left:auto}
+.tiles{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
+.tile{position:relative;height:74px;border:1.5px solid #CBD5D3;border-radius:5px;background:#fff repeating-linear-gradient(#fff 0 11px,#E3E9E8 11px 15px) content-box;padding:16px 10px 8px;transition:border-color .3s,background-color .3s,box-shadow .3s}
+.tile::after{content:'✓';position:absolute;right:6px;top:1px;font-size:14px;font-weight:800;color:#1F6FA8;opacity:0;transition:opacity .25s}
+.s2 .tile{border-color:#1F6FA8;background-color:#EAF3FB}
+.s2 .tile::after{opacity:1}
+.playing.s2:not(.s3) .tile,.playing.s2:not(.s3) .tile::after{transition-delay:calc(var(--i)*45ms)}
+.p1foot{display:flex;align-items:center;gap:16px;font-size:16px;color:var(--muted);margin-top:4px}
+.cnt{margin:0 4px;color:#164E78}
+.cnt b{font-size:30px;font-weight:800}
+.allcalc{margin-left:auto;font-size:18px;font-weight:800;color:#164E78;background:#E6F1FA;border:1.5px solid #A9C8E4;border-radius:8px;padding:6px 14px}
+.p1note{font-size:17px;line-height:1.5;padding:8px 12px;border-radius:8px;background:var(--soft);margin-top:auto}
+.case{border:1.5px solid var(--line);border-radius:10px;padding:10px 14px;background:#FAFCFC;display:flex;flex-direction:column;gap:7px}
+.case .ch{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;color:var(--muted)}
+.case .ch b{color:var(--ink);font-size:18px}
+.case .ex{font-size:17px;line-height:1.55;background:#fff;border:1px dashed var(--line-2);border-radius:6px;padding:8px 12px;color:#4A5655}
+.case mark{background:transparent;color:inherit;border-radius:3px;padding:1px 2px;transition:background-color .5s}
+.s5 .case mark{background-color:#FFD991}
+.case .res{align-self:flex-start;font-size:17px;font-weight:700;border-radius:8px;padding:5px 12px}
+.case .res.go{background:var(--amb-bg);border:1.5px solid var(--amb-bd);color:#7A4A06}
+.case .res.skip{background:#F1F4F4;border:1.5px solid var(--line);color:var(--muted)}
+.newnote{font-size:15.5px;color:var(--muted);margin-top:auto}
+.beam.bc{left:0;right:0;top:56px;--dist:250px;border-radius:0}
+.lim{position:absolute;left:56px;top:644px;width:1488px;height:150px;display:grid;grid-template-columns:170px 1fr 40px 1fr 40px 1fr 40px 1fr;align-items:stretch}
+.lim .tl{display:flex;flex-direction:column;justify-content:center;font-size:21px;font-weight:800;color:var(--rule-ink);padding-right:12px;line-height:1.35}
+.lim .tl small{font-size:14.5px;font-weight:400;color:var(--muted)}
+.tbox{border:1.5px solid #AEBDD0;background:var(--rule-bg);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;justify-content:center}
+.tbox b{font-size:19px}
+.tbox p{font-size:15.5px;line-height:1.4;color:#3B4B5C}
+.tbox.ai{background:var(--ai-bg);border-color:#9ED3CC}
+.tbox.ai b{color:var(--ai-ink)}
+.tbox.ntf{background:var(--auto-bg);border-color:#BCCADA}
+.playing.s6 .lim .tbox{animation:recalc 1s .2s 2}
+@keyframes recalc{50%{box-shadow:0 0 0 6px rgba(227,163,62,.35)}}
+
+/* ---------- slide 1 / 5: extension band ---------- */
+.extband{position:absolute;left:56px;top:668px;width:1488px;height:144px;border:1.5px solid #CBD6DF;border-radius:14px;background:#F4F7F9;display:grid;grid-template-columns:300px 1fr 1fr 1fr;gap:14px;padding:16px 18px}
+.extband .el{display:flex;flex-direction:column;justify-content:center;gap:6px}
+.extband .el b{font-size:22px;color:var(--rule-ink)}
+.extband .el span{font-size:15px;color:var(--muted);line-height:1.45}
+.extband .ei{background:#fff;border:1px solid #D5DEE6;border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.extband .ei b{font-size:19px;color:var(--rule-ink)}
+.extband .ei span{font-size:16px;color:var(--muted);line-height:1.45}
+
+/* ---------- slide 1 band variant ---------- */
+.extband.two{top:676px;height:136px;grid-template-columns:330px 1fr 1fr}
+
+/* ---------- slide 5: extension ---------- */
+.xcols{position:absolute;left:56px;top:196px;width:1488px;height:560px;display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.excard{border:1.5px solid #CBD6DF;border-radius:14px;background:#F8FAFB;padding:18px 22px;display:flex;flex-direction:column;gap:16px}
+.exh{display:flex;align-items:center;gap:12px}
+.exh b{font-size:28px;color:var(--rule-ink)}
+.exh span{font-size:15px;color:var(--muted);border:1px solid var(--line-2);border-radius:999px;padding:1px 12px;background:#fff}
+.req{font-size:18.5px;line-height:1.5;padding:10px 14px;border-left:4px solid var(--rule);background:#fff;border-radius:6px}
+.req em{font-style:normal;display:block;font-size:14px;color:var(--muted)}
+.exflow{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;align-items:stretch}
+.exflow > div{background:#fff;border:1px solid #D5DEE6;border-radius:10px;padding:12px 14px;min-height:150px}
+.exflow h5{font-size:18px;color:var(--rule-ink);margin-bottom:6px}
+.exflow p{font-size:16.5px;line-height:1.5}
+.exroll{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px}
+.exroll span{background:#fff;border:1px solid #D5DEE6;border-radius:8px;padding:4px 12px;font-weight:700;color:var(--rule-ink)}
+.exroll i{font-style:normal;color:var(--faint)}
+.exroll b{font-weight:500;margin-left:6px}
+.freq{font-size:16px;color:var(--muted);margin-top:-6px}
+.exrm{margin-top:auto;border-radius:10px;background:var(--human);color:#fff;padding:12px 18px;font-size:18px;display:flex;align-items:center;gap:14px}
+.exrm b{font-size:22px}
+.exrm small{margin-left:auto;font-size:15px;opacity:.85}
+
+/* ---------- slide 5: summary ---------- */
+.sumgrid{position:absolute;left:56px;top:196px;width:1488px;display:grid;grid-template-columns:1.25fr 1.25fr 1fr;gap:20px}
+.sg{border-radius:14px;padding:20px 24px;min-height:370px;display:flex;flex-direction:column;gap:12px}
+.sg.ai{background:linear-gradient(160deg,#E2F3F0,#F6FBFA);border:2px solid var(--ai)}
+.sg.rl{background:#F4F7F9;border:1.5px solid #CBD6DF}
+.sg h4{font-size:28px;color:var(--ai-ink)}
+.sg.rl h4{font-size:22px;color:var(--rule-ink)}
+.sg.rl .en{color:var(--rule)}
+.sg.rl ul.dots li::before{background:#8FA3B8}
+.sumrm{position:absolute;left:56px;top:596px;width:1488px;height:112px;border-radius:14px;background:var(--human);color:#fff;display:flex;align-items:center;gap:26px;padding:0 30px}
+.sumrm .who{font-size:40px;font-weight:800}
+.sumrm p{font-size:20px;line-height:1.5}
+.sumrm small{margin-left:auto;font-size:16px;opacity:.85}
+
+/* ---------- static deck (no animation) ---------- */
+body[data-static] *,body[data-static] *::before,body[data-static] *::after{transition:none!important;animation:none!important}
+body[data-static] #btnReplay,body[data-static] #btnAuto,body[data-static] #miniAuto{display:none}
+body[data-static] .capbar b{display:none}
+
+/* ---------- appendix ---------- */
+.appxbadge{position:absolute;right:56px;top:36px}
+.appx .hd h2{color:#3E3058}
+.appx .kick{color:var(--cand)}
+.cmp{position:absolute;left:56px;top:172px;width:1488px;height:330px;display:grid;grid-template-columns:300px 40px 1fr 40px 300px;align-items:stretch}
+.io{border:1.5px solid var(--line-2);border-radius:12px;padding:14px 16px;background:#FAFCFC;font-size:17px;line-height:1.55}
+.io h4{font-size:19px;color:var(--pri);margin-bottom:6px}
+.io ul{padding-left:1.1em}
+.ways{display:flex;flex-direction:column;gap:10px}
+.waytg{display:flex;gap:6px}
+.waytg button{border:1.5px solid var(--line-2);background:#fff;border-radius:8px;padding:5px 14px;font-size:16px;color:var(--muted)}
+.waytg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.way{flex:1;border:1.5px solid;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:8px;transition:opacity .4s}
+.way.rpa{border-color:#BCCADA;background:var(--auto-bg)}
+.way.cv{border-color:#C8B8E2;background:var(--cand-bg);border-style:dashed}
+.way .wsteps{display:flex;align-items:center;gap:6px;font-size:16px}
+.way .wsteps span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 9px}
+.way .wsteps i{font-style:normal;color:var(--faint)}
+.way p{font-size:14.5px;color:var(--muted)}
+.cmp[data-way="rpa"] .way.cv,.cmp[data-way="cv"] .way.rpa{opacity:.3}
+table.t{border-collapse:collapse;width:100%;font-size:18.5px;line-height:1.5}
+table.t th{background:var(--soft);color:var(--pri);text-align:left;padding:9px 12px;border:1px solid var(--line);font-size:17px}
+table.t td{padding:10px 12px;border:1px solid var(--line);vertical-align:top}
+.tblwrap.sm table.t{font-size:16.5px;line-height:1.4}
+.tblwrap.sm table.t td,.tblwrap.sm table.t th{padding:6px 12px}
+table.t td.pend{color:var(--faint);text-align:center;font-size:15px}
+.tblwrap{position:absolute;left:56px;width:1488px}
+.foot{position:absolute;left:56px;width:1488px;bottom:28px;font-size:16px;line-height:1.55;color:#3E3058;padding:10px 16px;border-radius:8px;background:var(--cand-bg);border:1px solid #C8B8E2}
+.cols3{position:absolute;left:56px;top:172px;width:1488px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.cols3 .io{min-height:560px}
+.cols3 .io li{margin-bottom:6px}
+.io.tbd{background:#fff;border-style:dashed}
+
+/* ---------- glossary panel ---------- */
+.panel{position:fixed;top:56px;right:0;bottom:0;width:min(420px,100vw);background:#fff;border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.1);z-index:45;padding:18px 22px;overflow:auto;transform:translateX(100%);transition:transform .3s;visibility:hidden}
+.panel.open{transform:none;visibility:visible}
+.panel h3{font-size:20px;color:var(--pri);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.panel h3 button{border:0;background:var(--soft);border-radius:6px;padding:4px 10px;font-size:14px}
+.panel dl dt{font-weight:700;margin-top:12px;color:var(--ink)}
+.panel dl dd{font-size:15px;line-height:1.6;color:#3C4A49}
+.panel p.n{font-size:13px;color:var(--muted);margin-top:16px;line-height:1.6}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+@media (max-width:1700px){ .brand{display:none} }
+@media (max-width:760px){
+  .brand{display:none}
+  body.reading #stage{padding:68px 8px 32px}
+  body.reading .caps{font-size:15px}
+}
+@media print{
+  @page{size:A4 landscape;margin:9mm}
+  html,body{height:auto;overflow:visible!important;background:#fff!important}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bar,#mini,.panel,.menu{display:none!important}
+  #stage{position:static!important;padding:0!important;display:block!important}
+  .slide{break-after:page;page-break-after:always;margin:0!important;max-width:none!important}
+  .frame{width:1000px!important;height:563px!important;box-shadow:none!important;border:1px solid #ccc}
+  .canvas{transform:scale(.625)!important;contain:strict} /* keep canvas overflow from widening the print layout */
+  .caps{columns:2;column-gap:28px;font-size:9.5pt!important;margin-top:6px!important;line-height:1.5!important}
+  .appx-divider{break-after:page}
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+.appx-wrap,#appxToggle{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar" id="bar">
+  <div class="brand"><b>信保案件數位化控管機制</b><span>AI 運作說明</span></div>
+  <nav class="chapters" id="chapters" aria-label="章節">
+    <button data-go="s1"><em>1</em>全貌</button>
+    <button data-go="sp"><em>2</em>雙平台</button>
+    <button data-go="s2a"><em>3</em>文件比對</button>
+    <button data-go="s3"><em>4</em>限額計算</button>
+    <button data-go="s4"><em>5</em>延伸控管</button>
+    <button data-go="s5"><em>6</em>總結</button>
+  </nav>
+  <div class="appx-wrap">
+    <button id="btnAppx" aria-haspopup="true" aria-expanded="false"></button>
+    <div class="menu" id="appxMenu" hidden>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="ctrls">
+    <span class="step-only" style="display:contents">
+    <button id="pPrev" title="上一頁（←、滾輪向上、手機下滑）">◀ 上一頁</button>
+    <span id="stepInfo"></span>
+    <button id="pNext" title="下一頁（→、滾輪向下、手機上滑）｜點擊畫面或空白鍵：下一個動作">下一頁 ▶</button>
+    <span class="sep"></span>
+    <button id="btnReplay" title="重播本頁">↺ 重播</button>
+    <button id="btnAuto" title="自動播放／暫停">▶ 自動播放</button>
+    <button id="btnPresent" title="簡報模式（Esc 離開）">⛶ 簡報模式</button>
+    </span>
+    <label id="appxToggle"><input type="checkbox" id="chkAppx"></label>
+    <button id="btnRead" title="完整閱讀：展開所有步驟">☰ 完整閱讀</button>
+    <button id="btnPrint" title="列印（自動展開所有步驟）">列印</button>
+    <button id="btnGloss" title="用語說明">用語</button>
+  </div>
+</header>
+
+<main id="stage">
+
+<!-- ================= 1 全貌 ================= -->
+<section class="slide" data-id="s1" data-ch="1" data-steps="0">
+  <div class="slide-label">畫面一｜全貌：雙場景 × 雙平台 × RPA</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd">
+      <div class="kick">01　全貌</div>
+      <h2>兩個落地場景，依案件量選用兩個 AI 平台</h2>
+      <p class="sub">RPA 串起整體流程並以 Email 通知，查核結果直接送到承辦人手上</p>
+    </div>
+    <div class="rpaframe"><span class="chip auto"><i>RPA</i>流程架構：名單、取件、串接、排程、Email 通知</span></div>
+    <div class="mx">
+      <div class="corner">落地場景 ＼ 執行平台</div>
+      <div class="ph fb"><span class="when">首次</span><b>法寶平台</b><span>地端 AI OCR｜舊案整批全面執行</span></div>
+      <div class="ph cp"><span class="when">日常</span><b>胖寶 × Copilot</b><span>新案每日｜舊案每雙週辨識變更</span></div>
+      <div class="rmcol"><span class="chip auto" style="background:#fff;align-self:flex-start"><i>RPA</i>Email 通知</span><span class="who">RM</span><p>辦理更正、更新、確認及通報</p><small>副本：指定同仁、主管</small></div>
+
+      <div class="sc"><small>場景一</small><b>送保案件相關文件比對</b></div>
+      <div class="mc fb">舊案的批覆書、信保頁面、徵信報告，全部整批比對一次</div>
+      <div class="mc cp">每日比對前一天送保案件的三份完整文件，找出可能影響理賠判斷的差異</div>
+
+      <div class="sc"><small>場景二</small><b>送保案件擔保品限額計算</b></div>
+      <div class="mc fb">舊案批覆書全部讀取、擷取並計算限額，不需判斷是否變更</div>
+      <div class="mc cp">新案同場景一，每日處理前一天的案件；舊案每雙週辨識有無擔保品變更，有變更才重新計算</div>
+    </div>
+    <div class="extband two">
+      <div class="el"><b>延伸控管</b><span>RPA 依名單、固定規則與排程執行，結果同樣以 Email 通知 RM</span></div>
+      <div class="ei"><b>負責人變更</b><span>商工資訊與 SBRS 負責人姓名比對</span></div>
+      <div class="ei"><b>違約通知時效</b><span>EW 日期與信保網站通報日期比對，每兩週一梯</span></div>
+    </div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>兩個落地場景：場景一「送保案件相關文件比對」、場景二「送保案件擔保品限額計算」，都由 AI 讀懂文件內容。</li>
+    <li>兩個執行平台：首次以法寶平台（地端 AI OCR）整批處理所有舊案；之後以胖寶 × Copilot 依固定頻率處理新案與變更案件。</li>
+    <li>RPA 負責整體流程架構（名單、取件、串接、排程），並以 Email 將結果通知 RM，副本指定同仁與主管。</li>
+    <li>延伸控管：負責人變更與違約通知時效，由 RPA 依名單、固定規則與排程執行。</li>
+  </ol>
+</section>
+
+<!-- ================= 2 雙平台 ================= -->
+<section class="slide" data-id="sp" data-ch="2" data-steps="0">
+  <div class="slide-label">畫面二｜雙平台：依案件量選用</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd">
+      <div class="kick">02　雙平台</div>
+      <h2>首次整批用法寶，日常用胖寶 × Copilot</h2>
+      <p class="sub">兩個場景都先把所有舊案整批掃一次，之後只處理新發生或變更的案件</p>
+    </div>
+    <div class="plat fb">
+      <div class="pt"><span class="when">首次｜舊案整批</span></div>
+      <h3>法寶平台</h3>
+      <dl>
+        <dt>技術</dt><dd>自建地端 AI OCR</dd>
+        <dt>適用</dt><dd>第一次執行時，兩個場景的所有舊案整批全面掃描</dd>
+        <dt>優勢</dt><dd>可大量、快速、有效率地整批執行</dd>
+        <dt>成本</dt><dd>有一定成本，但不高</dd>
+      </dl>
+    </div>
+    <div class="plat cp">
+      <div class="pt"><span class="when">日常｜新案與變更</span></div>
+      <h3>胖寶 × Copilot</h3>
+      <dl>
+        <dt>分工</dt><dd>胖寶迅速產出可穩定複用、執行正確率高的 prompt，交給 Copilot 執行</dd>
+        <dt>適用</dt><dd>舊案掃完後，新案每日處理、舊案每雙週辨識變更；單次處理量較小</dd>
+        <dt>成本</dt><dd>Copilot 費用由總行統包，不計價給使用者，相對無額外成本</dd>
+        <dt>限制</dt><dd>有使用限額，單件執行速度較慢</dd>
+      </dl>
+    </div>
+    <div class="tl2">
+      <div class="st fb"><b>首次</b>法寶平台整批掃完兩個場景的所有舊案</div>
+      <span class="arrow"></span>
+      <div class="st cp"><b>之後</b>胖寶 × Copilot 依固定頻率處理新案與變更案件</div>
+    </div>
+    <div class="rpanote"><span class="chip auto"><i>RPA</i>兩個平台之外</span>名單、取件、流程串接、排程與結果 Email 通知，都由 RPA 負責</div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>首次執行：法寶平台以自建地端 AI OCR，大量、快速、有效率地整批掃描兩個場景的所有舊案；有一定成本，但不高。</li>
+    <li>日常執行：舊案掃完後，新案每日處理、舊案每雙週辨識變更，單次量較小，改由胖寶 × Copilot 執行；Copilot 費用由總行統包，不計價給使用者，但有使用限額，單件速度較慢。</li>
+    <li>胖寶迅速產出可穩定複用、執行正確率高的 prompt，交給 Copilot 執行，讓每次執行方式一致。</li>
+    <li>名單、取件、流程串接、排程與 Email 通知由 RPA 負責。</li>
+  </ol>
+</section>
+
+<!-- ================= 2 文件一致性 ================= -->
+<section class="slide cxsec" data-id="s2a" data-ch="3" data-scn="A" data-steps="0">
+  <div class="slide-label">畫面三 A｜場景一 送保案件相關文件比對：文字不同、意思相同</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd" style="width:960px">
+      <div class="kick">03　場景一｜送保案件相關文件比對</div>
+      <h2>AI 逐項比對三份文件中同一事項的敘述</h2>
+      <p class="sub">情境 A｜文字不同、意思相同：比對的是語意，不是字面</p>
+    </div>
+    <div class="tabs"><button data-go="s2a">A　文字不同、意思相同</button><button data-go="s2b">B　可能影響理賠判斷的落差</button></div>
+    <span class="chip demo cxdemo">教學示意，非實際案件</span>
+    <div class="platnote"><span class="chip fb"><i>法寶</i>首次整批</span><span class="chip ai"><i>Copilot</i>日常每日</span></div>
+    <div class="cx"></div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>RPA 依 IBDM 名單取得批覆書、信保頁面、徵信報告；三份完整文件一起交給 AI，不做篩頁。首次由法寶平台整批比對舊案，日常由胖寶 × Copilot 每日比對前一天送保案件。</li>
+    <li>AI 閱讀全文，找出描述同一事項的段落：保證人、營運概況、授信期間。</li>
+    <li>比對 ① 保證人：「負責人甲」與「代表人甲」、「連帶保證人」與「連帶保證」，指同一安排 → 語意一致。</li>
+    <li>比對 ② 營運概況（同一年度）：「大致持平」與「與上年度相近」、「約六成」與「約 60%」意思相同 → 語意一致。</li>
+    <li>比對 ③ 授信期間：「三年」換算為 36 個月，與「36 個月」相同；攤還方式一致 → 語意一致。</li>
+    <li>三項皆語意一致，比對結果寫入查核報告；依原流程，發現差異時才通知 RM。</li>
+  </ol>
+</section>
+
+<section class="slide cxsec" data-id="s2b" data-ch="3" data-scn="B" data-steps="0">
+  <div class="slide-label">畫面三 B｜場景一 送保案件相關文件比對：可能影響理賠判斷的落差</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd" style="width:960px">
+      <div class="kick">03　場景一｜送保案件相關文件比對</div>
+      <h2>AI 比對出可能影響理賠判斷的落差</h2>
+      <p class="sub">情境 B｜範圍不限制式欄位，也包含徵信報告中的敘述性內容</p>
+    </div>
+    <div class="tabs"><button data-go="s2a">A　文字不同、意思相同</button><button data-go="s2b">B　可能影響理賠判斷的落差</button></div>
+    <span class="chip demo cxdemo">教學示意，非實際案件</span>
+    <div class="platnote"><span class="chip fb"><i>法寶</i>首次整批</span><span class="chip ai"><i>Copilot</i>日常每日</span></div>
+    <div class="cx"></div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>換一個示例案件：同樣把批覆書、信保頁面、徵信報告三份完整文件一起交給 AI。</li>
+    <li>AI 閱讀全文，找出描述同一事項的段落：保證人、營運概況、授信期間。</li>
+    <li>比對 ① 保證人：用語不同，指同一保證安排 → 語意一致。</li>
+    <li>比對 ③ 授信期間：「三年」換算為 36 個月，信保頁面卻是「60 個月」→ 待確認差異。</li>
+    <li>比對 ② 營運概況（同一年度）：徵信報告寫營收減少約三成、最大客戶停止下單，信保頁面寫「營運穩定」→ 待確認差異。</li>
+    <li>2 項待確認差異寫入查核報告，由 RPA 以 Email 通知 RM 確認並更正，副本指定同仁與主管。</li>
+  </ol>
+</section>
+
+<!-- ================= 4 場景二 限額計算 ================= -->
+<section class="slide" data-id="s3" data-ch="4" data-steps="6">
+  <div class="slide-label">畫面四｜場景二：送保案件擔保品限額計算</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd" style="width:1000px">
+      <div class="kick">04　場景二｜送保案件擔保品限額計算</div>
+      <h2>AI 讀懂批覆書，計算擔保品限額</h2>
+      <p class="sub">首次全部舊案整批計算；之後只針對新案與擔保品變更案件重新計算</p>
+    </div>
+    <div class="sched">
+      <h5>執行頻率</h5>
+      <ul>
+        <li><b>首次</b><span>舊案整批清查一次</span></li>
+        <li><b>每日</b><span>前一天的新案</span></li>
+        <li><b>每雙週</b><span>舊案辨識擔保品變更，有變更才重算</span></li>
+      </ul>
+    </div>
+    <div class="phase fb ph1" data-s="1">
+      <div class="phh"><span class="when">首次</span><b>舊案整批全面執行</b><span class="chip fb"><i>法寶</i>地端 AI OCR</span></div>
+      <div class="tiles"></div>
+      <div class="p1foot">
+        <span class="cntbox">已讀取並擷取<span class="cnt"><b>24</b>／24 份</span>（示意）</span>
+        <span class="allcalc" data-s="3">→ 全部計算限額</span>
+      </div>
+      <p class="p1note">舊案全部執行，不需判斷是否有擔保品變更</p>
+    </div>
+    <div class="phase cp ph2" data-s="4">
+      <div class="phh"><span class="when">日常</span><b>新案與變更案件</b><span class="chip ai"><i>Copilot</i>胖寶 prompt</span></div>
+      <div class="case">
+        <div class="ch"><b>舊案示例 X</b><span>每雙週辨識</span></div>
+        <div class="ex">……<mark>本案擔保品變更：原提供之土地解除擔保，改提供廠房建物設定擔保。</mark>……</div>
+        <div class="res go" data-s="5">有擔保品變更 → 重新計算限額</div>
+      </div>
+      <div class="case">
+        <div class="ch"><b>舊案示例 Y</b><span>每雙週辨識</span></div>
+        <div class="ex">……擔保品依原核准條件設定，本次僅調整額度用途說明。……</div>
+        <div class="res skip" data-s="5">未提及擔保品變更 → 不需重新計算</div>
+      </div>
+      <p class="newnote">新案：同場景一，每日處理前一天的案件，直接讀取並計算限額</p>
+      <div class="beam bc" data-s="5" aria-hidden="true"></div>
+    </div>
+    <div class="lim" data-s="3">
+      <div class="tl">限額計算<small>首次全部｜日常只算新案與變更案件</small></div>
+      <div class="tbox ai"><b>AI OCR 擷取</b><p>批保額度、擔保品價值、順位授信額度、稅捐等</p></div>
+      <span class="arrow"></span>
+      <div class="tbox"><b>依規定公式計算</b><p>公式依行內規範，本頁不列示</p></div>
+      <span class="arrow"></span>
+      <div class="tbox"><b>計算過程與判斷結果</b><p>確認有無異常</p></div>
+      <span class="arrow"></span>
+      <div class="tbox ntf"><b>Email 通知 RM</b><span class="chip auto" style="align-self:flex-start"><i>RPA</i>寄送</span><p>副本：指定同仁、主管</p></div>
+    </div>
+    <div class="note-motion" style="bottom:4px">案件、文件內容與份數皆為示意</div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>首次執行：RPA 依 CIF 名單自 CPS 取得所有舊案批覆書，交由法寶平台整批處理。</li>
+    <li>法寶平台以地端 AI OCR 大量、快速讀取每份批覆書，擷取限額計算所需資訊；舊案全部執行，不需判斷是否變更。</li>
+    <li>依規定公式計算擔保品限額，計算過程與判斷結果由 RPA 以 Email 通知 RM，副本指定同仁與主管。</li>
+    <li>舊案掃完後轉為日常，改由胖寶 × Copilot 執行：新案每日處理前一天的案件，舊案每雙週辨識一次。</li>
+    <li>Copilot 依胖寶產出的 prompt 閱讀批覆書，辨識是否提及擔保品變更，並附上原文依據。</li>
+    <li>有擔保品變更的舊案才重新計算限額並通知 RM；未變更者不需重算。新案則直接計算。</li>
+  </ol>
+</section>
+
+<!-- ================= 4 延伸控管 ================= -->
+<section class="slide" data-id="s4" data-ch="5" data-steps="0">
+  <div class="slide-label">畫面五｜延伸控管：貸後與違約時點</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd">
+      <div class="kick">05　延伸控管</div>
+      <h2>RPA 流程延伸到貸後與違約時點</h2>
+      <p class="sub">依名單、固定規則與排程執行，結果同樣以 Email 通知 RM</p>
+    </div>
+    <div class="xcols">
+      <div class="excard">
+        <div class="exh"><b>負責人變更</b><span>貸後</span></div>
+        <p class="req"><em>控管要求（原文件）</em>負責人變更需通知信保基金</p>
+        <div class="exflow">
+          <div><h5>名單</h5><p>PLMS 已註記「負責人變更」的 CIF</p></div><span class="arrow"></span>
+          <div><h5>查詢與比對</h5><p>商工資訊與 SBRS 的負責人姓名</p></div><span class="arrow"></span>
+          <div><h5>通知 RM</h5><p>變更資訊與查詢結果</p></div>
+        </div>
+        <div class="exrm"><b>RM</b>依查詢結果更新資料<small>副本：指定同仁、主管</small></div>
+      </div>
+      <div class="excard">
+        <div class="exh"><b>違約通知時效</b><span>違約</span></div>
+        <p class="req"><em>控管要求（原文件）</em>逾期未收回者需於二個月內通知信保基金</p>
+        <div class="exflow">
+          <div><h5>每梯名單</h5><p>新增 EW＋上一梯未通報</p></div><span class="arrow"></span>
+          <div><h5>查詢與比對</h5><p>EW2／EW3 日期與信保網站通報日期，計算已過天數</p></div><span class="arrow"></span>
+          <div><h5>通知 RM</h5><p>未通報者請盡快通報，附已過天數</p></div>
+        </div>
+        <div class="exroll"><span>第 N 梯</span><i>→</i><span>第 N+1 梯</span><i>→</i><span>…</span><b>未通報案件滾入下一梯，直到完成通報</b></div>
+        <p class="freq">舊案先整批清查；之後每兩週一梯</p>
+        <div class="exrm"><b>RM</b>向信保基金辦理通報<small>副本：指定同仁、主管</small></div>
+      </div>
+    </div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>負責人變更：RPA 自 PLMS 已註記的 CIF 名單開始，查詢商工資訊與 SBRS 的負責人姓名並比對，變更資訊與查詢結果以 Email 通知 RM，由 RM 更新資料。</li>
+    <li>違約通知時效：每梯名單為新增 EW 加上一梯未通報，RPA 比對 EW2／EW3 日期與信保網站通報日期並計算已過天數；未通報者以 Email 通知 RM，並滾入下一梯直到完成通報。</li>
+  </ol>
+</section>
+
+<!-- ================= 6 總結 ================= -->
+<section class="slide" data-id="s5" data-ch="6" data-steps="1">
+  <div class="slide-label">畫面六｜總結</div>
+  <div class="frame"><div class="canvas">
+    <div class="hd">
+      <div class="kick">06　總結</div>
+      <h2>雙場景 × 雙平台 × RPA</h2>
+      <p class="sub">AI 讀懂文件、算出限額；依案件量選用平台；RPA 串起流程並通知承辦人</p>
+    </div>
+    <div class="sumgrid">
+      <div class="sg ai">
+        <span class="en">雙場景</span>
+        <h4>AI 讀懂文件內容</h4>
+        <ul class="dots">
+          <li><b>送保案件相關文件比對</b>：三份完整文件全文比對，找出可能影響理賠判斷的差異</li>
+          <li><b>送保案件擔保品限額計算</b>：AI OCR 讀取批覆書並計算限額，日常只重算新案與變更案件</li>
+        </ul>
+      </div>
+      <div class="sg ai">
+        <span class="en">雙平台</span>
+        <h4>依案件量選用</h4>
+        <ul class="dots">
+          <li><b>法寶平台</b>：首次整批，地端 AI OCR 大量、快速處理所有舊案</li>
+          <li><b>胖寶 × Copilot</b>：日常執行，以可穩定複用的 prompt 處理新案與變更案件，費用由總行統包</li>
+        </ul>
+      </div>
+      <div class="sg rl">
+        <span class="en">RPA</span>
+        <h4>流程架構與通知</h4>
+        <ul class="dots">
+          <li>名單、取件、串接、排程</li>
+          <li>結果以 Email 通知 RM</li>
+          <li>延伸控管：負責人變更、違約通知時效</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sumrm"><span class="who">RM</span><p>收到查核結果後<br>辦理更正、更新、確認及通報</p><small>副本：指定同仁、主管</small></div>
+    <div class="capbar"></div>
+  </div></div>
+  <ol class="caps">
+    <li>我們把需要理解內容的工作交給 AI，讓查核依排程持續執行，並將結果直接送到承辦人手上。</li>
+  </ol>
+</section>
+
+</main>
+
+<div id="mini" aria-label="簡報控制">
+  <button data-act="pPrev" title="上一頁">◀</button>
+  <button data-act="pNext" title="下一頁">▶</button>
+  <button data-act="auto" id="miniAuto" title="自動播放／暫停">自動</button>
+  <button data-act="exit" title="離開簡報模式（Esc）">離開</button>
+</div>
+
+<aside class="panel" id="gloss" aria-label="用語說明">
+  <h3>用語 <button id="glossClose">關閉（Esc）</button></h3>
+  <dl>
+    <dt>信保</dt><dd>中小企業信用保證相關業務；依上下文也可能指中小企業信用保證基金。</dd>
+    <dt>間保</dt><dd>間接保證。個案向基金申請、經基金審理並取得保證書，再依核定內容辦理相關作業。</dd>
+    <dt>批保</dt><dd>批次信用保證。基金核給金融機構辦理批保的批號，銀行依相關規定徵審核貸；個案仍須辦理查詢、依查覆書辦理及逐筆移送。</dd>
+    <dt>批覆書</dt><dd>銀行授信核准文件，與「批保」是不同概念。</dd>
+    <dt>CIF</dt><dd>本案查核名單的客戶識別單位。</dd>
+    <dt>RM</dt><dd>接收查核結果，辦理更正、更新或通報的業務人員。</dd>
+    <dt>CPS、SBRS、PLMS、IBDM、EW2／EW3</dt><dd>沿用行內系統或業務代稱。</dd>
+    <dt>法寶平台</dt><dd>自建地端 AI OCR 平台。本案用於首次整批處理所有舊案。</dd>
+    <dt>胖寶 × Copilot</dt><dd>以胖寶產出可穩定複用的 prompt，交給 Copilot 執行。本案用於日常處理新案與變更案件。</dd>
+    <dt>RPA</dt><dd>本案的流程架構：名單、取件、串接、排程與 Email 通知。</dd>
+    <dt>信保頁面</dt><dd>提供給基金、供本次查核使用的資料內容。</dd>
+  </dl>
+  <p class="n">畫面中的案件、文件內容、報告欄位、頁數與天數均為教學示意，非實際案件或既有系統介面；動畫節奏不代表實際處理時間。</p>
+</aside>
+
+
+<script>
+(function(){
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const body=document.body, stage=$('#stage');
+const MAIN=['s1','sp','s2a','s2b','s3','s4','s5'], APPX=[];
+const STATIC=document.body.hasAttribute('data-static'); // no-animation deck: every page opens at its end state
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const state={id:'s1',step:0};
+let timers=[], autoplay=false;
+const clearTimers=()=>{timers.forEach(clearTimeout);timers=[];};
+const later=(fn,ms)=>timers.push(setTimeout(fn,ms));
+
+/* ---------- build: 場景二 old-case tiles ---------- */
+$$('.tiles').forEach(box=>{ box.innerHTML=Array.from({length:24},(_,i)=>`<div class="tile" style="--i:${i}"></div>`).join(''); });
+
+function pos(el,root){
+  let x=0,y=0,e=el;
+  while(e&&e!==root){x+=e.offsetLeft;y+=e.offsetTop;e=e.offsetParent;}
+  return {x,y,w:el.offsetWidth,h:el.offsetHeight};
+}
+
+/* ---------- slides 2A / 2B: AI 逐項比對（教學示意） ----------
+   {k:文字} marks a phrase; the same k in another document is the phrase it is compared with. */
+const TOPIC={1:'保證人',2:'營運概況',3:'授信期間'}, NUM='①②③';
+const DOCN={b:'批覆書',x:'信保頁面',c:'徵信報告'};
+const T_ROWS={1:['b1','x1','c1'],2:['x2','c2'],3:['b3','x3']};
+const WHY1='「負責人甲」與「代表人甲」為同一人；「連帶保證人」與「連帶保證」為同一保證安排。';
+const CX={
+  A:{
+    p:{
+      b1:'保證條件：由{g:負責人甲}擔任{h:連帶保證人}。',
+      b3:'授信期間：{p:三年}，{q:本金按月平均攤還}。',
+      x1:'保證人：公司{g:代表人甲}（{h:連帶保證}）。',
+      x2:'營運概況：最近年度營收與上年度{r:大致持平}，前三大客戶合計{s:約占六成}。',
+      x3:'借款期限：{p:36 個月}，{q:按月平均攤還本金}。',
+      c1:'{g:負責人甲}為本案{h:連帶保證人}，並為最大股東。',
+      c2:'最近年度營業收入{r:與上年度相近}；前三大客戶銷貨占比{s:約 60%}，往來穩定。'
+    },
+    rel:{g:'eq',h:'eq',r:'eq',s:'eq',p:'eq',q:'eq'},
+    order:[1,2,3],
+    v:{1:'ok',2:'ok',3:'ok'},
+    why:{1:WHY1, 2:'同一年度：「大致持平」與「與上年度相近」意思相同；「約六成」＝「約 60%」。', 3:'「三年」換算為 36 個月，與「36 個月」相同；攤還方式一致。'},
+    rep:{
+      1:['「負責人甲擔任連帶保證人」與「代表人甲（連帶保證）」用語不同，指同一保證安排。','批覆書／信保頁面／徵信報告'],
+      2:['同一年度：「大致持平」與「與上年度相近」、「約六成」與「約 60%」意思相同。','信保頁面／徵信報告'],
+      3:['「三年」與「36 個月」期間相同，攤還方式一致。','批覆書／信保頁面']
+    },
+    foot:'<b>未發現待確認差異</b><span>依原流程，發現差異時才通知 RM。</span>', footCls:''
+  },
+  B:{
+    p:{
+      b1:'保證條件：由{g:負責人甲}擔任{h:連帶保證人}。',
+      b3:'授信期間：{p:三年}，{q:本金按月平均攤還}。',
+      x1:'保證人：公司{g:代表人甲}（{h:連帶保證}）。',
+      x2:'營運概況：最近年度{r:營運穩定}，與主要客戶{s:持續往來}。',
+      x3:'借款期限：{p:60 個月}，{q:按月平均攤還本金}。',
+      c1:'{g:負責人甲}為本案{h:連帶保證人}，並為最大股東。',
+      c2:'最近年度{r:營業收入較上年度減少約三成}，主因{s:最大客戶自下半年起停止下單}。'
+    },
+    rel:{g:'eq',h:'eq',r:'neq',s:'neq',p:'neq',q:'eq'},
+    order:[1,3,2],
+    v:{1:'ok',2:'diff',3:'diff'},
+    why:{1:WHY1, 3:'「三年」換算為 36 個月，與「60 個月」不同 → 期間條件不一致。', 2:'同一年度：徵信報告寫營收減少約三成、最大客戶停止下單；信保頁面寫「營運穩定」，未反映此情形。'},
+    rep:{
+      1:['用語不同，指同一保證安排。','批覆書／信保頁面／徵信報告'],
+      2:['同一年度：徵信報告載明營收減少約三成、最大客戶停止下單；信保頁面描述為「營運穩定」，未反映上述情形。','信保頁面／徵信報告'],
+      3:['批覆書為三年，信保頁面為 60 個月，期間條件不一致。','批覆書／信保頁面']
+    },
+    foot:'<b>2 項待確認差異 → 通知 RM 確認並更正</b><span>副本：指定同仁、主管</span>', footCls:'diff'
+  }
+};
+const plain=s=>s.replace(/\{\w:([^}]+)\}/g,'$1');
+const vText=v=>v==='ok'?'語意一致':'待確認差異';
+const isCx=sec=>sec.classList.contains('cxsec');
+
+function buildCx(sec){
+  const d=CX[sec.dataset.scn];
+  $('.cx',sec).innerHTML=['b','x','c'].map((k,i)=>
+    `<div class="cxdoc" style="left:${56+i*354}px;--i:${i}"><div class="dh"><b>${DOCN[k]}</b><span>完整文件｜全文送 AI</span></div><div class="db">`+
+    [1,2,3].map(t=>{ const id=k+t; return d.p[id]
+      ?`<div class="stub" data-p="${id}" data-t="${t}"><span class="num">${NUM[t-1]} ${TOPIC[t]}</span><span class="vd"></span><span class="tx">${plain(d.p[id])}</span></div>`
+      :'<div class="stub empty"></div>'; }).join('')+'</div></div>').join('')+
+    `<div class="beam bx" aria-hidden="true"></div>
+    <div class="cxstage"><span class="chip ai cxh"><i>AI</i>逐項比對</span><div class="cxt"></div><div class="cxst"></div><svg class="cxlinks" aria-hidden="true"></svg><div class="cxwhy"></div></div>
+    <div class="rep"><div class="rh"><b>查核報告</b><span class="chip tbd">報告呈現示意</span><p>示例案件｜教學示意，非實際案件與實際報告欄位</p></div><div class="rows"></div><div class="rf ${d.footCls}">${d.foot}</div></div>`;
+}
+$$('.cxsec').forEach(buildCx);
+
+function cxCap(sec,i){
+  const cb=$('.capbar',sec), caps=$$('.caps li',sec);
+  cb.classList.add('on'); cb.classList.remove('strong');
+  cb.innerHTML=`<b>${i}／${caps.length}</b><span>${caps[i-1].innerHTML}</span>`;
+}
+function cxReset(sec){
+  const c=$('.canvas',sec);
+  c.classList.remove('c-docs','c-stage','c-done');
+  $$('.stub',c).forEach(s=>{ s.classList.remove('lit','seek','ok','diff'); const v=$('.vd',s); if(v) v.textContent=''; });
+  $('.beam',c).classList.remove('on');
+  const st=$('.cxstage',c); st.classList.remove('swap');
+  $$('.cxrow',st).forEach(r=>r.remove());
+  $('.cxlinks',st).innerHTML=''; $('.cxwhy',st).innerHTML=''; $('.cxst',st).className='cxst'; $('.cxt',st).innerHTML='';
+  $('.rows',c).innerHTML='';
+  $('.capbar',c).classList.remove('on');
+}
+/* put topic t on the compare stage (rows, connectors, reasoning, stamp), all hidden */
+function cxStage(sec,t){
+  const d=CX[sec.dataset.scn], st=$('.cxstage',sec), ids=T_ROWS[t];
+  $$('.cxrow',st).forEach(r=>r.remove());
+  $('.cxt',st).innerHTML=`${NUM[t-1]} ${TOPIC[t]}<small>${t===2?'同一年度｜':''}${ids.map(i=>DOCN[i[0]]).join('　↔　')}</small>`;
+  const H=54, G=34, top=62+(224-(ids.length*H+(ids.length-1)*G))/2;
+  ids.forEach((id,i)=>st.insertAdjacentHTML('beforeend',
+    `<div class="cxrow" data-p="${id}" style="top:${top+i*(H+G)}px"><span class="dn">${DOCN[id[0]]}</span><span class="tx">${
+      d.p[id].replace(/\{(\w):([^}]+)\}/g,(m,k,x)=>`<mark data-k="${k}" class="${d.rel[k]}">${x}</mark>`)}</span></div>`));
+  const rows=$$('.cxrow',st), keys=[];
+  let h='';
+  for(let i=0;i<rows.length-1;i++){
+    $$('mark',rows[i]).forEach(m=>{
+      const k=m.dataset.k, n=$(`mark[data-k="${k}"]`,rows[i+1]); if(!n) return;
+      if(!keys.includes(k)) keys.push(k);
+      const A=pos(m,st), B=pos(n,st), x1=A.x+A.w/2, y1=A.y+A.h, x2=B.x+B.w/2, y2=B.y, ym=(rows[i].offsetTop+H+rows[i+1].offsetTop)/2;
+      const r=d.rel[k];
+      h+=`<g class="${r}" data-k="${k}"><path pathLength="1" d="M${x1} ${y1} C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}"/>`+
+         `<g class="bd"><circle cx="${(x1+x2)/2}" cy="${ym}" r="14"/><text x="${(x1+x2)/2}" y="${ym+6}">${r==='eq'?'=':'≠'}</text></g></g>`;
+    });
+  }
+  $('.cxlinks',st).innerHTML=h;
+  const why=$('.cxwhy',st); why.innerHTML=''; why.className='cxwhy '+d.v[t];
+  const stp=$('.cxst',st); stp.className='cxst '+d.v[t]; stp.textContent=vText(d.v[t]);
+  return {st,rows,keys,why,stp};
+}
+const whyHTML=(txt,n)=>`<span class="chip ai"><i>AI</i>判讀</span><span class="w">${txt.slice(0,n)}</span>`;
+function cxVerdict(sec,t,anim){
+  const d=CX[sec.dataset.scn], v=d.v[t], c=$('.canvas',sec);
+  $$(`.stub[data-t="${t}"]`,c).forEach(s=>{ s.classList.remove('seek'); s.classList.add('lit',v); $('.vd',s).textContent=vText(v); });
+  const [txt,src]=d.rep[t];
+  $('.rows',c).insertAdjacentHTML('beforeend',`<div class="rrow ${v}${anim?' new':''}"><div class="rt">${NUM[t-1]} ${TOPIC[t]}<span>${vText(v)}</span></div><p>${txt}</p><small>來源：${src}</small></div>`);
+}
+/* static end state: every topic judged, last topic left on the stage */
+function cxFinal(sec){
+  const d=CX[sec.dataset.scn], c=$('.canvas',sec);
+  cxReset(sec); c.classList.add('c-docs','c-stage','c-done');
+  d.order.forEach(t=>cxVerdict(sec,t,false));
+  const last=d.order[d.order.length-1], s=cxStage(sec,last);
+  $$('mark',s.st).forEach(m=>m.classList.add('hit'));
+  $$('.cxlinks path,.cxlinks .bd',s.st).forEach(e=>e.classList.add('on'));
+  s.why.innerHTML=whyHTML(d.why[last],999); s.stp.classList.add('on');
+  if(!body.classList.contains('reading')) cxCap(sec,$$('.caps li',sec).length);
+}
+/* the play: hand over → read → compare each topic → report */
+function playCx(sec){
+  clearTimers(); stopPlaying();
+  const d=CX[sec.dataset.scn], c=$('.canvas',sec);
+  cxReset(sec); state.playing=true; c.classList.add('playing');
+  later(()=>{ cxCap(sec,1); c.classList.add('c-docs'); },300);
+  later(()=>{ cxCap(sec,2); $('.beam',c).classList.add('on'); },1900);
+  [1,2,3].forEach((t,i)=>later(()=>$$(`.stub[data-t="${t}"]`,c).forEach(s=>s.classList.add('lit')),2250+i*420));
+  later(()=>c.classList.add('c-stage'),4100);
+  const T0=4400, TT=7000;
+  d.order.forEach((t,idx)=>{
+    const T=T0+idx*TT, st=$('.cxstage',c);
+    later(()=>{ cxCap(sec,3+idx); $$(`.stub[data-t="${t}"]`,c).forEach(s=>s.classList.add('seek')); if(idx) st.classList.add('swap'); },T);
+    later(()=>{
+      st.classList.remove('swap');
+      const s=cxStage(sec,t);
+      s.rows.forEach((r,i)=>{                      // pull each paragraph out of its document
+        const src=pos($(`.stub[data-p="${r.dataset.p}"]`,c),c), dst=pos(r,c), k=src.w/dst.w;
+        r.animate([{transform:`translate(${src.x-dst.x}px,${src.y-dst.y}px) scale(${k})`,opacity:.4},{transform:'none',opacity:1}],
+          {duration:850,delay:i*150,easing:'cubic-bezier(.3,.7,.2,1)',fill:'backwards'});
+      });
+      s.keys.forEach((k,j)=>{
+        later(()=>$$(`mark[data-k="${k}"]`,s.st).forEach(m=>m.classList.add('hit')),1300+j*500);
+        later(()=>$$(`.cxlinks [data-k="${k}"] path`,s.st).forEach(p=>p.classList.add("on")),2350+j*450);
+        later(()=>$$(`.cxlinks [data-k="${k}"] .bd`,s.st).forEach(b=>b.classList.add('on')),2700+j*450);
+      });
+      const txt=d.why[t], step=Math.max(18,Math.round(1300/txt.length));
+      later(()=>{ s.why.classList.add('typing'); for(let n=0;n<=txt.length;n++) later(()=>{ s.why.innerHTML=whyHTML(txt,n); },n*step); },3450);
+      later(()=>s.why.classList.remove('typing'),3450+txt.length*step+100);
+      later(()=>s.stp.classList.add('on'),4950);
+      later(()=>cxVerdict(sec,t,true),5650);
+    },T+350);
+  });
+  const TE=T0+d.order.length*TT;
+  later(()=>{ cxCap(sec,6); c.classList.add('c-done'); },TE);
+  later(()=>{ stopPlaying(); updateUI(); if(autoplay) queueAuto(HOLD_PLAYED); },TE+2400);
+  updateUI();
+}
+
+/* ---------- page engine ----------
+   AI pages (s2, s3) play their whole sequence on entry; other pages open at their final state. */
+const slideEl=id=>$(`.slide[data-id="${id}"]`);
+const maxStep=id=>+slideEl(id).dataset.steps||0;
+const seq=()=>APPX.includes(state.id)?APPX:MAIN;
+const PLAY={s3:[300,1700,3000,3000,2400,3800]}; // delay before each step (ms); s2a/s2b run playCx
+const HOLD_PLAYED=8000, HOLD_STATIC=12000;
+const animated=sec=>!!PLAY[sec.dataset.id]||isCx(sec);
+let autoT=null;
+
+function flights(c,n){
+  if(reduced) return;
+  $$(`[data-from][data-s="${n}"]`,c).forEach(t=>{
+    const src=$(`[data-key="${t.dataset.from}"]`,c); if(!src) return;
+    const a=pos(src,c), b=pos(t,c);
+    t.animate([
+      {transform:`translate(${a.x-b.x}px,${a.y-b.y}px) scale(${a.w/b.w},${a.h/b.h})`,opacity:.9},
+      {transform:'none',opacity:1}
+    ],{duration:950,easing:'cubic-bezier(.3,.7,.2,1)'});
+  });
+}
+function applyStep(sec,n,animate){
+  const c=$('.canvas',sec), prev=+(c.dataset.cur||0), id=sec.dataset.id;
+  c.dataset.cur=n;
+  for(let i=1;i<=12;i++) c.classList.toggle('s'+i,i<=n);
+  $$('[data-s]',c).forEach(e=>e.classList.toggle('on',+e.dataset.s<=n));
+  const cb=$('.capbar',c);
+  if(cb){
+    const caps=$$('.caps li',sec).map(li=>li.innerHTML);
+    const show=n>0&&!!caps[n-1]&&(!!PLAY[id]||id==='s5');
+    cb.classList.toggle('on',show);
+    cb.classList.toggle('strong',id==='s5');
+    cb.innerHTML=show?(PLAY[id]?`<b>${n}／${caps.length}</b>`:'')+`<span>${caps[n-1]}</span>`:'';
+  }
+  if(animate&&n===prev+1) flights(c,n);
+}
+function stopPlaying(){ state.playing=false; $$('.canvas.playing').forEach(c=>c.classList.remove('playing')); }
+
+function layout(){
+  const fit=(sec,w,h)=>{
+    const s=Math.min(w/1600,h/900), f=$('.frame',sec);
+    f.style.width=Math.round(1600*s)+'px'; f.style.height=Math.round(900*s)+'px';
+    $('.canvas',sec).style.transform=`scale(${s})`;
+  };
+  if(body.classList.contains('reading')){
+    const w=Math.min(1400,stage.clientWidth-32);
+    $$('.slide').forEach(sec=>fit(sec,w,w*9/16));
+  }else{
+    const pad=body.classList.contains('present')?0:24;
+    fit(slideEl(state.id),stage.clientWidth-pad,stage.clientHeight-pad);
+  }
+}
+
+function updateUI(){
+  const sec=slideEl(state.id), ch=sec.dataset.ch, isA=APPX.includes(state.id), sq=seq(), i=sq.indexOf(state.id);
+  $$('#chapters button').forEach(b=>b.classList.toggle('on',!isA&&slideEl(b.dataset.go).dataset.ch===ch));
+  $('#btnAppx').classList.toggle('on',isA);
+  $('#stepInfo').textContent=`${i+1}／${sq.length}`+(state.playing?'　播放中':'');
+  $('#pPrev').disabled=i===0; $('#pNext').disabled=i===sq.length-1;
+  $('#btnReplay').disabled=!animated(sec)||reduced;
+  $$('.tabs button',sec).forEach(b=>b.classList.toggle('on',b.dataset.go===state.id));
+  const t=autoplay?'❚❚ 暫停':'▶ 自動播放';
+  $('#btnAuto').textContent=t; $('#btnAuto').classList.toggle('on',autoplay);
+  $('#miniAuto').textContent=autoplay?'暫停':'自動';
+}
+
+/* play a page's full step sequence */
+function play(sec){
+  clearTimers(); stopPlaying();
+  const id=sec.dataset.id, d=PLAY[id], c=$('.canvas',sec);
+  state.playing=true; c.classList.add('playing');
+  state.step=0; applyStep(sec,0,false);
+  let t=0;
+  d.forEach((ms,i)=>{
+    t+=ms; const n=i+1;
+    later(()=>{ state.step=n; applyStep(sec,n,true); updateUI(); if(id==='s3'&&n===2) countUp(sec); },t);
+  });
+  later(()=>{ stopPlaying(); updateUI(); if(autoplay) queueAuto(HOLD_PLAYED); },t+2600); // let the last reveal finish
+  updateUI();
+}
+/* 場景二: the old-case counter runs up while the tiles are read */
+function countUp(sec){
+  const b=$('.cnt b',sec), n=$$('.tile',sec).length;
+  for(let i=0;i<=n;i++) later(()=>{ b.textContent=i; },i*45);
+}
+
+function go(id,how='play'){
+  if(body.classList.contains('reading')){ // in reading mode just scroll
+    const el=slideEl(id); if(el.classList.contains('appx')&&!body.classList.contains('with-appx')) setAppx(true);
+    el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'}); return;
+  }
+  clearTimers(); stopPlaying();
+  if(STATIC) how='final';
+  state.id=id;
+  $$('.slide').forEach(s=>s.classList.toggle('active',s.dataset.id===id));
+  layout();
+  const sec=slideEl(id), m=maxStep(id);
+  if(animated(sec)&&how==='play'&&!reduced){ isCx(sec)?playCx(sec):play(sec); return; }
+  if(isCx(sec)) cxFinal(sec); else { state.step=m; applyStep(sec,m,false); }
+  updateUI();
+  if(autoplay) queueAuto(animated(sec)?HOLD_PLAYED:HOLD_STATIC);
+}
+function nextPage(){const sq=seq(),i=sq.indexOf(state.id); if(i<sq.length-1) go(sq[i+1],'play'); else if(autoplay) stopAuto();}
+function prevPage(){const sq=seq(),i=sq.indexOf(state.id); if(i>0) go(sq[i-1],'final');}
+
+function queueAuto(ms){ clearTimeout(autoT); autoT=setTimeout(nextPage,ms); timers.push(autoT); }
+function startAuto(){ if(body.classList.contains('reading')) return; autoplay=true; if(!state.playing) queueAuto(5000); updateUI(); }
+function stopAuto(){ autoplay=false; clearTimeout(autoT); updateUI(); }
+function toggleAuto(){ autoplay?stopAuto():startAuto(); }
+function replay(){ if(animated(slideEl(state.id))&&!reduced) go(state.id,'play'); }
+/* next action (click / tap / Space / remote): finish a page that is still playing, otherwise go to the next page */
+function finishPage(){
+  clearTimers(); stopPlaying();
+  const sec=slideEl(state.id);
+  if(isCx(sec)) cxFinal(sec); else { state.step=maxStep(state.id); applyStep(sec,state.step,false); }
+  updateUI();
+  if(autoplay) queueAuto(HOLD_PLAYED);
+}
+function advance(){ state.playing?finishPage():nextPage(); }
+
+/* ---------- modes ---------- */
+let readingBefore=null;
+function setReading(on){
+  if(on===body.classList.contains('reading')) return;
+  clearTimers(); stopPlaying(); autoplay=false;
+  if(on){
+    if(body.classList.contains('present')) setPresent(false);
+    body.classList.add('reading');
+    layout();
+    $$('.slide').forEach(sec=>{ if(isCx(sec)) cxFinal(sec); else applyStep(sec,maxStep(sec.dataset.id),false); });
+    $('#btnRead').textContent='▣ 返回簡報';
+    window.scrollTo(0,0);
+  }else{
+    body.classList.remove('reading');
+    $('#btnRead').textContent='☰ 完整閱讀';
+    go(state.id,'final');
+  }
+  updateUI();
+}
+function setAppx(on){ body.classList.toggle('with-appx',on); $('#chkAppx').checked=on; if(body.classList.contains('reading')) layout(); }
+function setPresent(on){
+  body.classList.toggle('present',on);
+  if(on){ closeGloss(); const r=document.documentElement.requestFullscreen; if(r) document.documentElement.requestFullscreen().catch(()=>{}); }
+  else if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  requestAnimationFrame(layout);
+}
+document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement&&body.classList.contains('present')) setPresent(false); });
+let miniT=null;
+document.addEventListener('mousemove',()=>{
+  if(!body.classList.contains('present')) return;
+  body.classList.add('show-mini'); clearTimeout(miniT); miniT=setTimeout(()=>body.classList.remove('show-mini'),2600);
+});
+
+/* glossary + appendix menu */
+const gloss=$('#gloss');
+function openGloss(){gloss.classList.add('open');}
+function closeGloss(){gloss.classList.remove('open');}
+const menu=$('#appxMenu'), btnAppx=$('#btnAppx');
+function toggleMenu(force){
+  const open=force!==undefined?force:menu.hidden;
+  if(open){ const r=btnAppx.getBoundingClientRect(); menu.style.left=Math.max(8,Math.min(r.left,innerWidth-320))+'px'; }
+  menu.hidden=!open; btnAppx.setAttribute('aria-expanded',open);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');
+  if(!b){
+    const menuOpen=!menu.hidden;
+    if(!e.target.closest('.appx-wrap')) toggleMenu(false);
+    if(!menuOpen&&!body.classList.contains('reading')&&e.target.closest('#stage .frame')&&!String(getSelection())) advance();
+    return;
+  }
+  if(e.detail>0) b.blur();
+  if(b.dataset.go){ toggleMenu(false); go(b.dataset.go,'play'); return; }
+  if(b.dataset.way){ const cmp=b.closest('.cmp'); cmp.dataset.way=b.dataset.way; $$('.waytg button',cmp).forEach(x=>x.classList.toggle('on',x===b)); return; }
+  switch(b.id||b.dataset.act){
+    case 'btnAppx': toggleMenu(); break;
+    case 'pPrev': prevPage(); break;
+    case 'pNext': nextPage(); break;
+    case 'btnReplay': replay(); break;
+    case 'btnAuto': case 'auto': toggleAuto(); break;
+    case 'btnPresent': setPresent(true); break;
+    case 'exit': setPresent(false); break;
+    case 'btnRead': userMode=true; setReading(!body.classList.contains('reading')); break;
+    case 'btnPrint': window.print(); break;
+    case 'btnGloss': gloss.classList.contains('open')?closeGloss():openGloss(); break;
+    case 'glossClose': closeGloss(); break;
+  }
+});
+$('#chkAppx').addEventListener('change',e=>setAppx(e.target.checked));
+
+document.addEventListener('keydown',e=>{
+  if(e.altKey||e.ctrlKey||e.metaKey) return;
+  const onCtl=e.target.closest&&e.target.closest('button,input,select,textarea');
+  if(e.key==='Escape'){
+    if(!menu.hidden){toggleMenu(false);return;}
+    if(gloss.classList.contains('open')){closeGloss();return;}
+    if(body.classList.contains('present')){setPresent(false);return;}
+    return;
+  }
+  if(body.classList.contains('reading')) return;
+  switch(e.key){
+    case 'ArrowRight': e.preventDefault(); nextPage(); break;
+    case 'ArrowLeft': e.preventDefault(); prevPage(); break;
+    case ' ': case 'Spacebar':
+      if(onCtl) return; e.preventDefault(); e.shiftKey?prevPage():advance(); break;
+    case 'PageDown': case 'ArrowDown': e.preventDefault(); advance(); break;
+    case 'PageUp': case 'ArrowUp': e.preventDefault(); prevPage(); break;
+    case 'Home': e.preventDefault(); go(seq()[0],'play'); break;
+    case 'End': e.preventDefault(); { const sq=seq(); go(sq[sq.length-1],'final'); } break;
+  }
+});
+
+/* wheel and vertical swipe turn pages (slide mode only); one gesture = one page */
+let wheelSum=0, wheelLock=0, flipAt=0;
+stage.addEventListener('wheel',e=>{
+  if(body.classList.contains('reading')||e.ctrlKey) return;
+  e.preventDefault();
+  const now=Date.now();
+  if(now<wheelLock){ wheelLock=Math.max(flipAt+500,now+180); return; } // swallow the rest of this gesture
+  wheelSum+=e.deltaY;
+  if(Math.abs(wheelSum)>=40){ wheelSum>0?nextPage():prevPage(); wheelSum=0; flipAt=now; wheelLock=now+500; }
+},{passive:false});
+let touch0=null;
+stage.addEventListener('touchstart',e=>{
+  touch0=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;
+},{passive:true});
+stage.addEventListener('touchend',e=>{
+  if(!touch0||body.classList.contains('reading')) return;
+  const t=e.changedTouches[0], dx=t.clientX-touch0.x, dy=t.clientY-touch0.y; touch0=null;
+  if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)*1.5) dy<0?nextPage():prevPage();
+});
+
+let rT=null;
+/* phones: portrait reads as a document, landscape shows tap-through slides; a manual choice wins */
+let userMode=false, printing=false;
+function autoMode(){
+  if(userMode||printing||body.classList.contains('present')) return;
+  const portraitPhone=innerWidth<760&&innerHeight>innerWidth;
+  if(portraitPhone!==body.classList.contains('reading')) setReading(portraitPhone);
+}
+addEventListener('resize',()=>{clearTimeout(rT); rT=setTimeout(()=>{ autoMode(); layout(); },80);});
+
+let printRestore=false;
+addEventListener('beforeprint',()=>{ printing=true; if(!body.classList.contains('reading')){ printRestore=true; setReading(true); } });
+addEventListener('afterprint',()=>{ printing=false; if(printRestore){ printRestore=false; setReading(false); } });
+
+/* ---------- init ---------- */
+go('s1');
+autoMode();
+// connector positions depend on text metrics: redo end states once fonts settle
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ $$('.cxsec').forEach(sec=>{ if(sec.offsetWidth&&!$('.canvas',sec).classList.contains('playing')) cxFinal(sec); }); });
+})();
+</script>
+</body>
+</html>
